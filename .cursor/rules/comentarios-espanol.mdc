@@ -1,0 +1,39 @@
+---
+description: Comentarios descriptivos en español para todo el código del proyecto
+globs: src/**/*
+alwaysApply: true
+---
+
+# Comentarios en español (Zihua Descubre)
+
+Todo componente, función o bloque lógico complejo DEBE incluir comentarios descriptivos en **español**.
+
+## Reglas
+
+1. **Componentes React**: cabecera JSDoc `/** ... */` explicando propósito y responsabilidad.
+2. **Props**: documentar cada prop en JSDoc con `@param` (tipo y descripción).
+3. **Secciones de UI**: usar comentarios JSX `{/* Nombre de sección */}` para delimitar bloques visuales.
+4. **Funciones auxiliares e íconos**: JSDoc breve indicando qué hace y qué recibe.
+5. **Lógica no trivial**: comentar el *por qué*, no lo obvio (mapeos, normalización de datos, condiciones de estado).
+
+## Ejemplo
+
+```jsx
+/**
+ * Tarjeta de un negocio local en el feed de exploración.
+ * @param {string} props.name - Nombre del establecimiento.
+ */
+function BusinessCard({ name }) {
+  return (
+    <article>
+      {/* Encabezado: título del negocio */}
+      <h3>{name}</h3>
+    </article>
+  )
+}
+```
+
+## Idioma
+
+- Comentarios siempre en español.
+- Nombres de variables, funciones y componentes pueden permanecer en inglés si ya siguen esa convención.
