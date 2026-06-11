@@ -1,3 +1,9 @@
+// ============================================================================
+// IMPORTACIONES: React y cliente Supabase
+// ============================================================================
+import { useState } from 'react'
+import { supabase } from '../config/supabase'
+
 /**
  * Ícono SVG de corazón para la acción de guardar en favoritos.
  * @param {{ className?: string }} props - Clases de Tailwind aplicadas al SVG.
@@ -69,6 +75,7 @@ function MapPinIcon({ className }) {
  * @param {string} props.location - Zona o colonia donde se ubica el negocio.
  * @param {string[]} props.tags - Arreglo de etiquetas de categoría y precio (ej. ['Dining', '$$']).
  * @param {string} props.imageUrl - URL de la imagen principal que se renderiza en la parte superior.
+ * @param {string} props.businessId - ID único del negocio en Supabase para registrar el check-in.
  * @param {() => void} [props.onCheckIn] - Callback opcional al pulsar el botón "Check-in".
  * @param {() => void} [props.onFavorite] - Callback opcional al pulsar el ícono de favorito.
  * @param {boolean} [props.isFavorite=false] - Indica si el negocio ya está guardado en favoritos.
@@ -79,10 +86,68 @@ function BusinessCard({
   location,
   tags,
   imageUrl,
+  businessId,
   onCheckIn,
   onFavorite,
   isFavorite = false,
 }) {
+  // ============================================================================
+  // ESTADOS LOCALES DEL COMPONENTE
+  // ============================================================================
+  
+  /**
+   * isCheckingIn: controla si la solicitud de check-in está en curso.
+   * Se utiliza para deshabilitar el botón y mostrar el estado "Guardando...".
+   * Tipo: boolean | Valor inicial: false
+   */
+  const [isCheckingIn, setIsCheckingIn] = useState(false)
+  
+  /**
+   * hasCheckedIn: indica si el usuario ya ha realizado un check-in en este negocio.
+   * Una vez true, el botón cambia de color y texto.
+   * Tipo: boolean | Valor inicial: false
+   */
+  const [hasCheckedIn, setHasCheckedIn] = useState(false)
+
+  // ============================================================================
+  // FUNCIÓN: handleCheckIn - Realiza el check-in en Supabase
+  // ============================================================================
+  /**
+   * Función asíncrona que maneja el proceso de check-in del usuario.
+   * Evita ejecución múltiple si ya está cargando o si ya se visitó el negocio.
+   * Registra el check-in en la tabla 'checkins' de Supabase.
+   */
+  const handleCheckIn = async () => {
+    // Validación: evita ejecutar si ya está cargando o si ya se ha visitado
+    if (isCheckingIn || hasCheckedIn) {
+      return
+    }
+
+    try {
+      // Cambia el estado a "cargando" para desactivar el botón
+      setIsCheckingIn(true)
+
+      // Inserta un registro en la tabla 'checkins' de Supabase con el ID del negocio
+      const { error } = await supabase
+        .from('checkins')
+        .insert([{ business_id: businessId }])
+
+      // Si hay un error en la inserción, lanza una excepción
+      if (error) {
+        throw error
+      }
+
+      // Si la inserción fue exitosa, marca el check-in como completado
+      setHasCheckedIn(true)
+    } catch (err) {
+      // En caso de error, registra en consola y permite reintentar
+      console.error('Error al realizar check-in:', err.message)
+      // Nota: setHasCheckedIn NO se ejecuta, permitiendo reintentos
+    } finally {
+      // En todos los casos, regresa el estado de carga a false
+      setIsCheckingIn(false)
+    }
+  }
   return (
     <article className="w-full max-w-sm overflow-hidden rounded-3xl bg-[#1a2232] shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
       {/* Bloque 1 — Imagen: usa `imageUrl` como fuente y `title` como texto alternativo */}
@@ -138,13 +203,20 @@ function BusinessCard({
           </div>
 
           {/* Botón de Check-in: acción principal de la tarjeta */}
+          {/* Cambia de color y texto según el estado de carga y si ya se visitó */}
           <button
             type="button"
-            onClick={onCheckIn}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#F97316] px-4 py-2 text-sm font-bold text-white transition-colors hover:bg-orange-400 active:bg-orange-600"
+            onClick={handleCheckIn}
+            disabled={isCheckingIn || hasCheckedIn}
+            className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold text-white transition-colors ${
+              hasCheckedIn
+                ? 'bg-emerald-500 cursor-default hover:bg-emerald-500'  // Verde si ya visitado
+                : 'bg-[#F97316] hover:bg-orange-400 active:bg-orange-600 disabled:opacity-60'  // Naranja por defecto
+            }`}
           >
             <MapPinIcon className="h-4 w-4" />
-            Check-in
+            {/* Muestra diferente texto según el estado del check-in */}
+            {hasCheckedIn ? '¡Visitado!' : isCheckingIn ? 'Guardando...' : 'Check-in'}
           </button>
         </div>
       </div>

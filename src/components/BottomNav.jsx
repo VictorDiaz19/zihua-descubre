@@ -1,3 +1,5 @@
+import { NavLink } from 'react-router-dom'
+
 /**
  * Ícono SVG de brújula para la pestaña "Explorar".
  * @param {{ className?: string }} props - Clases de Tailwind aplicadas al SVG.
@@ -87,21 +89,20 @@ function UserIcon({ className }) {
 
 /**
  * Configuración estática de los ítems de la barra de navegación.
- * `active` indica la pestaña visible actualmente (por ahora hardcodeada).
+ * Cada ruta corresponde a una sección de la aplicación.
  */
 const NAV_ITEMS = [
-  { id: 'explorar', label: 'Explorar', Icon: CompassIcon, active: true },
-  { id: 'guardados', label: 'Guardados', Icon: BookmarkIcon, active: false },
-  { id: 'mapa', label: 'Mapa', Icon: MapPinIcon, active: false },
-  { id: 'perfil', label: 'Perfil', Icon: UserIcon, active: false },
+  { id: 'explorar', label: 'Explorar', path: '/', Icon: CompassIcon },
+  { id: 'guardados', label: 'Guardados', path: '/guardados', Icon: BookmarkIcon },
+  { id: 'mapa', label: 'Mapa', path: '/mapa', Icon: MapPinIcon },
+  { id: 'perfil', label: 'Perfil', path: '/perfil', Icon: UserIcon },
 ]
 
 /**
  * Barra de navegación inferior fija de la aplicación.
  *
- * Proporciona acceso rápido a las cuatro secciones principales:
- * Explorar, Guardados, Mapa y Perfil. Se mantiene visible al hacer scroll
- * y resalta la pestaña activa con el color naranja de la marca (#F97316).
+ * Proporciona enlaces a las rutas principales de React Router. Usa `NavLink`
+ * para saber cuál pestaña está activa y aplicar estilos condicionales.
  */
 function BottomNav() {
   return (
@@ -109,20 +110,21 @@ function BottomNav() {
       aria-label="Navegación principal"
       className="fixed bottom-0 left-0 z-50 w-full border-t border-gray-800 bg-[#1E293B]"
     >
-      {/* Contenedor de Botones: distribución equitativa de las 4 pestañas */}
+      {/* Contenedor de enlaces: distribución equitativa de las 4 pestañas */}
       <div className="mx-auto flex max-w-lg items-stretch justify-around px-2">
-        {NAV_ITEMS.map(({ id, label, Icon, active }) => (
-          <button
+        {NAV_ITEMS.map(({ id, label, path, Icon }) => (
+          <NavLink
             key={id}
-            type="button"
-            aria-current={active ? 'page' : undefined}
-            className={`flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
-              active ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-300'
-            }`}
+            to={path}
+            className={({ isActive }) =>
+              `flex flex-1 flex-col items-center gap-1 py-3 text-xs font-medium transition-colors ${
+                isActive ? 'text-[#F97316]' : 'text-gray-400 hover:text-gray-300'
+              }`
+            }
           >
             <Icon className="h-6 w-6" />
             <span>{label}</span>
-          </button>
+          </NavLink>
         ))}
       </div>
     </nav>
