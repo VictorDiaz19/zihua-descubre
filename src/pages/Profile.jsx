@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+// Hook de navegación para redireccionar a otras rutas como la de recompensas
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../config/supabase'
 
 /**
@@ -12,11 +14,17 @@ import { supabase } from '../config/supabase'
  * Todos los comentarios explican en español la lógica de estado y autenticación.
  */
 export default function Profile() {
+  // Hook de navegación para redirigir al usuario a la pantalla de recompensas
+  const navigate = useNavigate()
   // Estados de sesión y formulario
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  // Estado para alternar mostrar/ocultar la contraseña en los inputs.
+  // Usado por ambos campos: "Contraseña" y "Confirmar Contraseña".
+  // Mantener la UX consistente: un único toggle controla la visibilidad.
+  const [showPassword, setShowPassword] = useState(false)
   // `confirmPassword`: utilizado únicamente durante el registro para validar
   // que el usuario haya introducido la misma contraseña dos veces.
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -129,25 +137,77 @@ export default function Profile() {
               />
 
 
-              <input
-                type="password"
-                placeholder="Contraseña"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full rounded-xl bg-slate-800 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none"
-                required
-              />
+              {/* Contenedor relativo para posicionar el botón mostrar/ocultar contraseña. */}
+              <div className="relative">
+                {/* Input de contraseña con `type` dinámico según `showPassword`. */}
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  placeholder="Contraseña"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  // `pr-10` asegura espacio a la derecha para el icono
+                  className="w-full rounded-xl bg-slate-800 px-4 pr-10 py-3 text-white placeholder:text-slate-400 focus:outline-none"
+                  required
+                />
+
+                {/* Botón absoluto que alterna `showPassword`. */}
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                  aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                >
+                  {/* Icono: ojo abierto (cuando showPassword es false) */}
+                  {!showPassword ? (
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                    </svg>
+                  ) : (
+                    /* Icono: ojo tachado (cuando showPassword es true) */
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.58 10.58A3 3 0 0113.42 13.42" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.88 5.09A9 9 0 0112 5c4.477 0 8.268 2.943 9.542 7-1.01 3.217-2.99 5.642-5.38 6.76" />
+                    </svg>
+                  )}
+                </button>
+              </div>
 
               {/* Input adicional para confirmar contraseña: solo visible al registrarse */}
               {!isLogin && (
-                <input
-                  type="password"
-                  placeholder="Confirmar Contraseña"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  className="w-full rounded-xl bg-slate-800 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none"
-                  required
-                />
+                <div className="relative">
+                  {/* El mismo toggle controla la visibilidad de ambos campos. */}
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    placeholder="Confirmar Contraseña"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    // `pr-10` asegura que el texto no quede debajo del icono
+                    className="w-full rounded-xl bg-slate-800 px-4 pr-10 py-3 text-white placeholder:text-slate-400 focus:outline-none"
+                    required
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-200"
+                    aria-label={showPassword ? 'Ocultar contraseña' : 'Mostrar contraseña'}
+                  >
+                    {!showPassword ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                      </svg>
+                    ) : (
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3l18 18" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.58 10.58A3 3 0 0113.42 13.42" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.88 5.09A9 9 0 0112 5c4.477 0 8.268 2.943 9.542 7-1.01 3.217-2.99 5.642-5.38 6.76" />
+                      </svg>
+                    )}
+                  </button>
+                </div>
               )}
 
               <button
@@ -222,10 +282,37 @@ export default function Profile() {
             <p className="mt-3 text-3xl font-semibold text-white">12</p>
             <p className="mt-1 text-sm text-orange-500">Explorando la ciudad</p>
           </div>
-          <div className="rounded-3xl bg-slate-800/50 px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.45)] backdrop-blur-sm">
-            <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Puntos</p>
-            <p className="mt-3 text-3xl font-semibold text-white">450</p>
-            <p className="mt-1 text-sm text-orange-500">Recompensas cercanas</p>
+          {/* Tarjeta de Puntos: Clickeable con indicador visual de navegación */}
+          <div 
+            onClick={() => navigate('/recompensas')}
+            className="rounded-3xl bg-slate-800/50 px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.45)] backdrop-blur-sm cursor-pointer hover:bg-slate-800 transition-colors"
+          >
+            {/* Contenedor interno con flex: lado izquierdo (info) y lado derecho (CTA) */}
+            <div className="flex items-center justify-between">
+              {/* Lado izquierdo: Información de puntos */}
+              <div>
+                <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Puntos</p>
+                <p className="mt-3 text-3xl font-semibold text-white">450</p>
+                <p className="mt-1 text-sm text-orange-500">Recompensas cercanas</p>
+              </div>
+
+              {/* Lado derecho: Llamada a la acción (CTA) con icono de flecha */}
+              <div className="flex flex-row items-center gap-1 text-orange-500">
+                {/* Texto "Ver recompensas" */}
+                <p className="text-sm font-medium text-orange-500 whitespace-nowrap">Ver recompensas</p>
+                {/* Icono de flecha ChevronRight */}
+                <svg
+                  className="h-5 w-5 text-orange-500"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  xmlns="http://www.w3.org/2000/svg"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </div>
           </div>
           <div className="rounded-3xl bg-slate-800/50 px-5 py-6 shadow-[0_12px_30px_rgba(15,23,42,0.45)] backdrop-blur-sm">
             <p className="text-sm uppercase tracking-[0.2em] text-slate-400">Reseñas</p>

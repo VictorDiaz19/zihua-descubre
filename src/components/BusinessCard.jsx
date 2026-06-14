@@ -2,6 +2,9 @@
 // IMPORTACIONES: React y cliente Supabase
 // ============================================================================
 import { useState } from 'react'
+// Importar `useNavigate` para redirecciones desde acciones de UI (ej. Check-in)
+import { useNavigate } from 'react-router-dom'
+// Cliente de Supabase para operaciones de auth y BD
 import { supabase } from '../config/supabase'
 
 /**
@@ -109,6 +112,19 @@ function BusinessCard({
    */
   const [hasCheckedIn, setHasCheckedIn] = useState(false)
 
+  // Estado que controla la visibilidad del modal de autenticación.
+  // Se dispara cuando un usuario no autenticado intenta realizar un check-in.
+  const [showAuthModal, setShowAuthModal] = useState(false)
+
+  // Estado que controla el estado de localización GPS durante el check-in.
+  // Cuando `isLocating` es true, el botón muestra "Obteniendo ubicación..."
+  // y se deshabilita temporalmente mientras se obtiene la geolocalización.
+  const [isLocating, setIsLocating] = useState(false)
+
+  // Instancia del hook de navegación para redirigir al usuario cuando sea necesario.
+  // Usamos esta navegación en la validación de sesión antes del check-in.
+  const navigate = useNavigate()
+
   // ============================================================================
   // FUNCIÓN: handleCheckIn - Realiza el check-in en Supabase
   // ============================================================================
@@ -127,10 +143,59 @@ function BusinessCard({
       // Cambia el estado a "cargando" para desactivar el botón
       setIsCheckingIn(true)
 
-      // Inserta un registro en la tabla 'checkins' de Supabase con el ID del negocio
-      const { error } = await supabase
-        .from('checkins')
-        .insert([{ business_id: businessId }])
+      // --- Validación de sesión: obtener el usuario actual desde Supabase ---
+      // Esto garantiza que el check-in quede vinculado a una cuenta de usuario.
+      const {
+        data: { user },
+      } = await supabase.auth.getUser()
+
+      // Si no hay usuario autenticado, en lugar de usar la alerta nativa
+      // mostramos un modal estilizado que invita al usuario a iniciar sesión.
+      if (!user) {
+        // Abrimos el modal de autenticación y retornamos temprano.
+        setShowAuthModal(true)
+        return
+      }
+
+      // --- Captura de Coordenadas GPS Reales ---
+      // Utilizamos la API nativa de Geolocalización del navegador para obtener
+      // latitud y longitud reales del dispositivo del usuario.
+      // Esto requiere permiso del usuario y debe estar sobre HTTPS en producción.
+      setIsLocating(true)
+
+      // Promesa que envuelve navigator.geolocation.getCurrentPosition
+      // para poder usarla con async/await.
+      const position = await new Promise((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          // Callback de Éxito: se ejecuta cuando se obtiene la ubicación
+          (successPosition) => {
+            // Extraemos latitud y longitud de los coordenadas GPS
+            const { latitude, longitude } = successPosition.coords
+            // Resolvemos la promesa con las coordenadas
+            resolve({ lat: latitude, lng: longitude })
+          },
+          // Callback de Error: se ejecuta si hay un error o se deniega el permiso
+          (error) => {
+            // Rechazamos la promesa para manejar el error en el catch
+            reject(error)
+          }
+        )
+      })
+
+      // Apagamos el estado de localización una vez obtenido las coordenadas
+      setIsLocating(false)
+
+      // Inserta un registro en la tabla 'checkins' de Supabase.
+      // Ahora incluimos las coordenadas GPS reales capturadas.
+      // Estructura: { business_id, user_id, lat (latitud), lng (longitud) }
+      const { error } = await supabase.from('checkins').insert([
+        {
+          business_id: businessId,
+          user_id: user.id,
+          lat: position.lat,
+          lng: position.lng,
+        },
+      ])
 
       // Si hay un error en la inserción, lanza una excepción
       if (error) {
@@ -140,12 +205,27 @@ function BusinessCard({
       // Si la inserción fue exitosa, marca el check-in como completado
       setHasCheckedIn(true)
     } catch (err) {
-      // En caso de error, registra en consola y permite reintentar
-      console.error('Error al realizar check-in:', err.message)
+      // En caso de error de geolocalización o Supabase:
+      // Si es error de geolocalización, mostramos un mensaje descriptivo
+      if (err.code === 1) {
+        // Código 1: Usuario denegó el permiso de ubicación
+        alert('Para realizar el check-in, es necesario activar los permisos de ubicación en tu dispositivo.')
+      } else if (err.code === 2) {
+        // Código 2: Posición no disponible (error interno del dispositivo)
+        alert('No pudimos obtener tu ubicación. Intenta nuevamente.')
+      } else if (err.code === 3) {
+        // Código 3: Timeout en la obtención de ubicación
+        alert('La solicitud de ubicación tardó demasiado. Intenta nuevamente.')
+      } else {
+        // Otros errores (Supabase, red, etc.)
+        console.error('Error al realizar check-in:', err.message)
+        alert('Error al registrar el check-in. Intenta nuevamente.')
+      }
       // Nota: setHasCheckedIn NO se ejecuta, permitiendo reintentos
     } finally {
-      // En todos los casos, regresa el estado de carga a false
+      // En todos los casos, apagamos ambos estados de carga
       setIsCheckingIn(false)
+      setIsLocating(false)
     }
   }
   return (
@@ -203,11 +283,11 @@ function BusinessCard({
           </div>
 
           {/* Botón de Check-in: acción principal de la tarjeta */}
-          {/* Cambia de color y texto según el estado de carga y si ya se visitó */}
+          {/* Cambia de color y texto según el estado de carga, localizacón y si ya se visitó */}
           <button
             type="button"
             onClick={handleCheckIn}
-            disabled={isCheckingIn || hasCheckedIn}
+            disabled={isCheckingIn || hasCheckedIn || isLocating}
             className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold text-white transition-colors ${
               hasCheckedIn
                 ? 'bg-emerald-500 cursor-default hover:bg-emerald-500'  // Verde si ya visitado
@@ -215,11 +295,61 @@ function BusinessCard({
             }`}
           >
             <MapPinIcon className="h-4 w-4" />
-            {/* Muestra diferente texto según el estado del check-in */}
-            {hasCheckedIn ? '¡Visitado!' : isCheckingIn ? 'Guardando...' : 'Check-in'}
+            {/* Muestra diferente texto según el estado del check-in, geolocalización e inserción */}
+            {hasCheckedIn
+              ? '¡Visitado!'
+              : isLocating
+              ? 'Obteniendo ubicación...'
+              : isCheckingIn
+              ? 'Guardando...'
+              : 'Check-in'}
           </button>
         </div>
       </div>
+
+      {/* -------------------------------------------------------------
+          Modal de autenticación: reemplaza la alerta nativa del navegador.
+          Se renderiza solo si `showAuthModal` es true. Está posicionado
+          en fixed para aparecer por encima de todo el contenido.
+      -------------------------------------------------------------- */}
+      {showAuthModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-slate-700 rounded-2xl p-6 text-center shadow-2xl">
+            {/* Icono superior: candado representando autenticación */}
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-[#1f2937]">
+              <svg className="h-6 w-6 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 11c.512 0 .93.386.994.883L13 12v1m-1 4h.01M5 11V9a7 7 0 0114 0v2" />
+                <rect x="4" y="11" width="16" height="10" rx="2" ry="2" stroke="currentColor" strokeWidth="2" fill="none"></rect>
+              </svg>
+            </div>
+
+            <h3 className="text-xl font-bold text-white mb-2">¡Inicia sesión para descubrir!</h3>
+            <p className="text-slate-400 mb-6 text-sm">Guarda tus lugares favoritos y gana recompensas explorando Zihuatanejo.</p>
+
+            {/* Botones: Primario = navegar al perfil, Secundario = cerrar modal */}
+            <div className="flex flex-col">
+              <button
+                type="button"
+                onClick={() => {
+                  // Navegamos al perfil/registro para que el usuario inicie sesión
+                  navigate('/perfil')
+                }}
+                className="bg-orange-500 hover:bg-orange-600 text-white font-semibold py-3 px-4 rounded-xl w-full mb-3 transition-colors"
+              >
+                Ir a mi perfil
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowAuthModal(false)}
+                className="bg-transparent text-slate-400 hover:text-white font-medium py-2 px-4 rounded-xl w-full transition-colors"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </article>
   )
 }
