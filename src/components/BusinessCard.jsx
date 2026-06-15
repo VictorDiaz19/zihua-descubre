@@ -1,7 +1,7 @@
 // ============================================================================
 // IMPORTACIONES: React y cliente Supabase
 // ============================================================================
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 // Importar `useNavigate` para redirecciones desde acciones de UI (ej. Check-in)
 import { useNavigate } from 'react-router-dom'
 // Cliente de Supabase para operaciones de auth y BD
@@ -112,6 +112,12 @@ function BusinessCard({
    */
   const [hasCheckedIn, setHasCheckedIn] = useState(false)
 
+  /**
+   * currentUser: usuario autenticado actual desde Supabase.
+   * Se utiliza para verificar el historial de check-ins al montar.
+   */
+  const [currentUser, setCurrentUser] = useState(null)
+
   // Estado que controla la visibilidad del modal de autenticación.
   // Se dispara cuando un usuario no autenticado intenta realizar un check-in.
   const [showAuthModal, setShowAuthModal] = useState(false)
@@ -124,6 +130,62 @@ function BusinessCard({
   // Instancia del hook de navegación para redirigir al usuario cuando sea necesario.
   // Usamos esta navegación en la validación de sesión antes del check-in.
   const navigate = useNavigate()
+
+  // ============================================================================
+  // EFECTO: cargar el usuario actual y suscribirse a cambios de sesión
+  // ============================================================================
+  useEffect(() => {
+    async function loadCurrentUser() {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser()
+        setCurrentUser(user)
+      } catch (err) {
+        console.error('Error cargando usuario:', err)
+      }
+    }
+
+    loadCurrentUser()
+
+    const { data: authListener } = supabase.auth.onAuthStateChange((_, session) => {
+      setCurrentUser(session?.user ?? null)
+    })
+
+    return () => {
+      authListener.subscription.unsubscribe()
+    }
+  }, [])
+
+  // ============================================================================
+  // EFECTO: validar si el usuario ya realizó un check-in anteriormente
+  // ============================================================================
+  useEffect(() => {
+    async function checkPreviousVisit() {
+      try {
+        if (!currentUser) {
+          return
+        }
+
+        const { data } = await supabase
+          .from('checkins')
+          .select('id')
+          .eq('business_id', businessId)
+          .eq('user_id', currentUser.id)
+          .limit(1)
+
+        if (data && data.length > 0) {
+          setHasCheckedIn(true)
+        }
+      } catch (err) {
+        console.error('Error al comprobar visitas anteriores:', err)
+      }
+    }
+
+    if (businessId) {
+      checkPreviousVisit()
+    }
+  }, [businessId, currentUser])
 
   // ============================================================================
   // FUNCIÓN: handleCheckIn - Realiza el check-in en Supabase
@@ -229,7 +291,10 @@ function BusinessCard({
     }
   }
   return (
-    <article className="w-full max-w-sm overflow-hidden rounded-3xl bg-[#1a2232] shadow-[0_8px_32px_rgba(0,0,0,0.35)]">
+    <article
+      onClick={() => navigate('/negocio/' + businessId)}
+      className="cursor-pointer w-full max-w-sm overflow-hidden rounded-3xl bg-[#1a2232] shadow-[0_8px_32px_rgba(0,0,0,0.35)] transition hover:-translate-y-1 hover:border hover:border-orange-500"
+    >
       {/* Bloque 1 — Imagen: usa `imageUrl` como fuente y `title` como texto alternativo */}
       <div className="relative p-3 pb-0">
         <img
@@ -239,7 +304,10 @@ function BusinessCard({
         />
         <button
           type="button"
-          onClick={onFavorite}
+          onClick={(event) => {
+            event.stopPropagation()
+            onFavorite?.()
+          }}
           aria-label={isFavorite ? 'Quitar de favoritos' : 'Guardar en favoritos'}
           className="absolute right-6 top-6 flex h-9 w-9 items-center justify-center rounded-full bg-[#0a0f18]/55 text-[#fdf2f0] backdrop-blur-sm transition-colors hover:bg-[#0a0f18]/75"
         >
@@ -286,7 +354,10 @@ function BusinessCard({
           {/* Cambia de color y texto según el estado de carga, localizacón y si ya se visitó */}
           <button
             type="button"
-            onClick={handleCheckIn}
+            onClick={(event) => {
+              event.stopPropagation()
+              handleCheckIn()
+            }}
             disabled={isCheckingIn || hasCheckedIn || isLocating}
             className={`flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm font-bold text-white transition-colors ${
               hasCheckedIn

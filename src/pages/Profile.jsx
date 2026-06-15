@@ -21,6 +21,7 @@ export default function Profile() {
   const [loading, setLoading] = useState(true)
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [role, setRole] = useState('tourist')
   // Estado para alternar mostrar/ocultar la contraseña en los inputs.
   // Usado por ambos campos: "Contraseña" y "Confirmar Contraseña".
   // Mantener la UX consistente: un único toggle controla la visibilidad.
@@ -82,7 +83,15 @@ export default function Profile() {
         }
         setSession(data?.session ?? null)
       } else {
-        const { data, error } = await supabase.auth.signUp({ email, password })
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              role,
+            },
+          },
+        })
         if (error) {
           alert(error.message)
           console.error('Error en signUp:', error)
@@ -117,6 +126,21 @@ export default function Profile() {
     }
   }
 
+  // Cambia al modo negocio para que el usuario pueda gestionar su panel.
+  async function switchToBusinessMode() {
+    try {
+      await supabase.auth.updateUser({
+        data: {
+          role: 'business',
+        },
+      })
+      window.location.href = '/negocio-admin/web'
+    } catch (err) {
+      console.error('Error cambiando a modo negocio:', err)
+      alert('No se pudo cambiar al modo negocio. Intenta de nuevo.')
+    }
+  }
+
   // Si no hay sesión: mostrar formulario de auth
   if (!session) {
     return (
@@ -127,6 +151,37 @@ export default function Profile() {
             <p className="mt-2 text-sm text-slate-400">Accede para guardar check-ins y puntos.</p>
 
             <form onSubmit={handleAuth} className="mt-6 flex flex-col gap-4">
+              <div className="grid gap-2 rounded-3xl border border-slate-700 bg-slate-950/80 p-2">
+                <p className="text-sm font-medium text-slate-200">Selecciona tu rol</p>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRole('tourist')}
+                    className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                      role === 'tourist'
+                        ? 'bg-orange-500 text-slate-950'
+                        : 'border border-slate-700 bg-slate-800 text-slate-300 hover:border-orange-400'
+                    }`}
+                  >
+                    Soy Explorador
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('business')}
+                    className={`rounded-2xl px-4 py-3 text-sm font-semibold transition ${
+                      role === 'business'
+                        ? 'bg-orange-500 text-slate-950'
+                        : 'border border-slate-700 bg-slate-800 text-slate-300 hover:border-orange-400'
+                    }`}
+                  >
+                    Soy Negocio
+                  </button>
+                </div>
+                <p className="text-xs text-slate-500">
+                  Este rol se guardará en el perfil del usuario y define la experiencia de navegación.
+                </p>
+              </div>
+
               <input
                 type="email"
                 placeholder="Correo electrónico"
@@ -135,7 +190,6 @@ export default function Profile() {
                 className="w-full rounded-xl bg-slate-800 px-4 py-3 text-white placeholder:text-slate-400 focus:outline-none"
                 required
               />
-
 
               {/* Contenedor relativo para posicionar el botón mostrar/ocultar contraseña. */}
               <div className="relative">
@@ -319,6 +373,17 @@ export default function Profile() {
             <p className="mt-3 text-3xl font-semibold text-white">5</p>
             <p className="mt-1 text-sm text-orange-500">Opiniones publicadas</p>
           </div>
+        </div>
+
+        <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+          <button
+            type="button"
+            onClick={switchToBusinessMode}
+            className="flex w-full items-center justify-center gap-3 rounded-3xl border border-slate-800 bg-slate-900 px-5 py-4 text-white font-medium transition hover:bg-slate-800"
+          >
+            <span className="text-lg">🏬</span>
+            <span>Cambiar a modo Negocio</span>
+          </button>
         </div>
 
         <section className="rounded-3xl bg-[#11203b] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
