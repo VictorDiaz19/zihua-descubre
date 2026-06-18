@@ -3,25 +3,9 @@ import { supabase } from '../config/supabase'
 /**
  * Página de perfil del negocio dentro del panel administrativo.
  *
- * Incluye la acción de cambiar al modo turista y cerrar sesión para que el
- * enrutador lea los metadatos actualizados y redirija a la experiencia de
- * explorador.
+ * Incluye la acción de cerrar sesión para que el usuario salga de la cuenta.
  */
 export default function BusinessAdminProfile() {
-  async function switchToTouristMode() {
-    try {
-      await supabase.auth.updateUser({
-        data: {
-          role: 'tourist',
-        },
-      })
-      window.location.href = '/'
-    } catch (error) {
-      console.error('Error cambiando al modo turista:', error)
-      alert('No se pudo cambiar el modo. Intenta de nuevo.')
-    }
-  }
-
   async function handleSignOut() {
     try {
       await supabase.auth.signOut()
@@ -40,15 +24,6 @@ export default function BusinessAdminProfile() {
       </p>
 
       <div className="mt-8 space-y-4">
-        <button
-          type="button"
-          onClick={switchToTouristMode}
-          className="flex w-full items-center justify-center gap-2 rounded-3xl bg-slate-800 px-5 py-3 text-white transition hover:bg-slate-700"
-        >
-          <span className="text-lg">🧭</span>
-          <span>Cambiar a modo Explorador</span>
-        </button>
-
         <button
           type="button"
           onClick={handleSignOut}

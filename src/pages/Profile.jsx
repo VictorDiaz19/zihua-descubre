@@ -126,21 +126,6 @@ export default function Profile() {
     }
   }
 
-  // Cambia al modo negocio para que el usuario pueda gestionar su panel.
-  async function switchToBusinessMode() {
-    try {
-      await supabase.auth.updateUser({
-        data: {
-          role: 'business',
-        },
-      })
-      window.location.href = '/negocio-admin/web'
-    } catch (err) {
-      console.error('Error cambiando a modo negocio:', err)
-      alert('No se pudo cambiar al modo negocio. Intenta de nuevo.')
-    }
-  }
-
   // Si no hay sesión: mostrar formulario de auth
   if (!session) {
     return (
@@ -373,17 +358,6 @@ export default function Profile() {
             <p className="mt-3 text-3xl font-semibold text-white">5</p>
             <p className="mt-1 text-sm text-orange-500">Opiniones publicadas</p>
           </div>
-        </div>
-
-        <div className="rounded-3xl border border-slate-800 bg-slate-900/90 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
-          <button
-            type="button"
-            onClick={switchToBusinessMode}
-            className="flex w-full items-center justify-center gap-3 rounded-3xl border border-slate-800 bg-slate-900 px-5 py-4 text-white font-medium transition hover:bg-slate-800"
-          >
-            <span className="text-lg">🏬</span>
-            <span>Cambiar a modo Negocio</span>
-          </button>
         </div>
 
         <section className="rounded-3xl bg-[#11203b] p-6 shadow-[0_20px_60px_rgba(0,0,0,0.35)]">

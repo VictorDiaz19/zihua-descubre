@@ -18,10 +18,11 @@ export default function BusinessForm() {
   const [foodType, setFoodType] = useState('')
   const [phone, setPhone] = useState('')
   const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('restaurant')
   const [lat, setLat] = useState(null)
   const [lng, setLng] = useState(null)
-  const [coverImage, setCoverImage] = useState(null)
-  const [galleryImages, setGalleryImages] = useState([])
+  const [coverFile, setCoverFile] = useState(null)
+  const [galleryFiles, setGalleryFiles] = useState([])
   const [isLocating, setIsLocating] = useState(false)
   const [error, setError] = useState('')
   const navigate = useNavigate()
@@ -65,6 +66,7 @@ export default function BusinessForm() {
         setName(data.name || '')
         setAddress(data.address || '')
         setFoodType(data.food_type || '')
+        setCategory(data.category || 'restaurant')
         setPhone(data.phone || '')
         setDescription(data.description || '')
         setLat(data.lat ?? null)
@@ -128,7 +130,7 @@ export default function BusinessForm() {
       owner_id: user.id,
       name: name.trim(),
       address: address.trim(),
-      category: 'restaurant', // valor estático temporal para no violar el constraint NOT NULL
+      category: category,
       food_type: foodType.trim(),
       phone: phone.trim() || null,
       description: description.trim() || null,
@@ -136,22 +138,91 @@ export default function BusinessForm() {
       lng,
     }
 
-    let error = null
+    // Guardado inteligente: Si owner_id ya existe, actualiza; si no, inserta.
+    const { data: savedBusiness, error: saveError } = await supabase
+      .from('businesses')
+      .upsert(businessDataToSave, { onConflict: 'owner_id' })
+      .select()
+      .single()
 
-    if (businessId) {
-      businessDataToSave.id = businessId
-      const { error: updateError } = await supabase.from('businesses').upsert(businessDataToSave)
-      error = updateError
-    } else {
-      const { error: insertError } = await supabase.from('businesses').insert([businessDataToSave])
-      error = insertError
-    }
-
-    if (error) {
+    if (saveError) {
       setError('No se pudo guardar la información. Revisa la consola.')
-      console.error('Error guardando BusinessForm:', error)
+      console.error('Error guardando BusinessForm:', saveError)
       setSaving(false)
       return
+    }
+
+    const savedBusinessId = savedBusiness?.id
+
+    if (coverFile && savedBusinessId) {
+      try {
+        const fileExt = coverFile.name.split('.').pop()
+        const fileName = `${savedBusinessId}-cover-${Date.now()}.${fileExt}`
+        const filePath = `${user.id}/${fileName}`
+
+        const { error: uploadError } = await supabase.storage
+          .from('business_media_bucket')
+          .upload(filePath, coverFile)
+
+        if (uploadError) throw uploadError
+
+        const {
+          data: { publicUrl },
+        } = supabase.storage.from('business_media_bucket').getPublicUrl(filePath)
+
+        const { error: mediaError } = await supabase.from('business_media').insert([
+          {
+            business_id: savedBusinessId,
+            url: publicUrl,
+            caption: 'Foto de portada',
+            // media_type: 'image', // Ajusta según el ENUM exacto en la base de datos
+          },
+        ])
+
+        if (mediaError) throw mediaError
+      } catch (mediaSaveError) {
+        setError('No se pudo guardar la foto de portada. Revisa la consola.')
+        console.error('Error guardando business_media:', mediaSaveError)
+        setSaving(false)
+        return
+      }
+    }
+
+    if (galleryFiles && galleryFiles.length > 0 && savedBusinessId) {
+      try {
+        for (let i = 0; i < galleryFiles.length; i++) {
+          const file = galleryFiles[i]
+          const fileExt = file.name.split('.').pop()
+          const fileName = `${savedBusinessId}-gallery-${i}-${Date.now()}.${fileExt}`
+          const filePath = `${user.id}/${fileName}`
+
+          const { error: uploadErr } = await supabase.storage
+            .from('business_media_bucket')
+            .upload(filePath, file)
+
+          if (uploadErr) throw uploadErr
+
+          const {
+            data: { publicUrl },
+          } = supabase.storage.from('business_media_bucket').getPublicUrl(filePath)
+
+          const { error: mediaErr } = await supabase.from('business_media').insert([
+            {
+              business_id: savedBusinessId,
+              url: publicUrl,
+              caption: 'Galería',
+              sort_order: i,
+            },
+          ])
+
+          if (mediaErr) throw mediaErr
+        }
+      } catch (gallerySaveError) {
+        setError('No se pudo guardar las fotos de la galería. Revisa la consola.')
+        console.error('Error guardando business_media gallery:', gallerySaveError)
+        setSaving(false)
+        return
+      }
     }
 
     navigate('/negocio-admin/web')
@@ -229,18 +300,35 @@ export default function BusinessForm() {
 
           <div className="space-y-2">
             <label htmlFor="foodType" className="text-sm font-medium text-slate-200">
-              Tipo de Comida / Etiquetas *
+              Especialidades / Palabras Clave (Opcional)
             </label>
             <input
               id="foodType"
               type="text"
               value={foodType}
               onChange={(event) => setFoodType(event.target.value)}
-              required
-              placeholder="restaurante, tacos, mariscos"
+              placeholder="Tacos, Al pastor, Pet-friendly, Terraza"
               className="w-full rounded-3xl border border-slate-700 bg-slate-950 px-4 py-3 text-white placeholder:text-slate-500 outline-none focus:border-orange-400 focus:ring-2 focus:ring-orange-400/20"
             />
-            <p className="text-sm text-slate-500">Describe el estilo de comida o etiquetas separadas por comas.</p>
+            <p className="text-sm text-slate-500">
+              Palabras clave para que los turistas te encuentren en el buscador (Ej. Tacos, Al pastor, Pet-friendly, Terraza, Música en vivo). Sepáralas con comas.
+            </p>
+          </div>
+
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-slate-300 mb-1">Categoría del Negocio *</label>
+            <select
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full bg-slate-900 border border-slate-700 rounded-xl p-3 text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none"
+            >
+              <option value="restaurant">Restaurante</option>
+              <option value="hotel">Hotel / Hospedaje</option>
+              <option value="bar">Bar / Vida Nocturna</option>
+              <option value="cafe">Cafetería</option>
+              <option value="store">Tienda Local</option>
+              <option value="tour">Experiencia / Tour</option>
+            </select>
           </div>
 
           <div className="rounded-3xl border border-slate-700 bg-slate-950/80 p-5">
@@ -252,11 +340,11 @@ export default function BusinessForm() {
                 <input
                   type="file"
                   accept="image/*"
-                  onChange={(event) => setCoverImage(event.target.files?.[0] ?? null)}
+                  onChange={(event) => setCoverFile(event.target.files?.[0] ?? null)}
                   className="hidden"
                 />
                 <span className="inline-flex items-center justify-center rounded-full bg-slate-800 px-3 py-2 text-sm text-slate-300">
-                  {coverImage ? coverImage.name : 'Seleccionar archivo'}
+                  {coverFile ? coverFile.name : 'Seleccionar archivo'}
                 </span>
               </label>
 
@@ -271,25 +359,25 @@ export default function BusinessForm() {
                     const files = Array.from(event.target.files || [])
                     if (files.length > 5) {
                       alert('Solo puedes subir hasta 5 fotos en la galería.')
-                      setGalleryImages(files.slice(0, 5))
+                      setGalleryFiles(files.slice(0, 5))
                       return
                     }
-                    setGalleryImages(files)
+                    setGalleryFiles(files)
                   }}
                   className="hidden"
                 />
                 <span className="inline-flex items-center justify-center rounded-full bg-slate-800 px-3 py-2 text-sm text-slate-300">
-                  {galleryImages.length > 0
-                    ? `${galleryImages.length} foto(s) seleccionada(s)`
+                  {galleryFiles.length > 0
+                    ? `${galleryFiles.length} foto(s) seleccionada(s)`
                     : 'Seleccionar archivos'}
                 </span>
               </label>
 
-              {galleryImages.length > 0 && (
+              {galleryFiles.length > 0 && (
                 <div className="space-y-2 rounded-3xl border border-slate-700 bg-slate-950/80 p-4 text-sm text-slate-300">
                   <p className="font-medium text-white">Vista previa de galería:</p>
                   <ul className="list-disc space-y-1 pl-5">
-                    {galleryImages.map((file, index) => (
+                    {galleryFiles.map((file, index) => (
                       <li key={index}>{file.name}</li>
                     ))}
                   </ul>

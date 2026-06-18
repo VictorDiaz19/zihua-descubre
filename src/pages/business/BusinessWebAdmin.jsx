@@ -1,6 +1,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../../config/supabase'
+import 'react-photo-view/dist/react-photo-view.css'
+import { PhotoProvider, PhotoView } from 'react-photo-view'
+
+const CATEGORY_MAP = {
+  restaurant: 'Restaurante',
+  hotel: 'Hotel',
+  bar: 'Bar / Vida Nocturna',
+  cafe: 'Cafetería',
+  store: 'Tienda',
+  tour: 'Tour / Experiencia',
+}
 
 /**
  * Página principal del panel "Mi Web" para dueños de negocio.
@@ -10,6 +21,8 @@ import { supabase } from '../../config/supabase'
  */
 export default function BusinessWebAdmin() {
   const [businessData, setBusinessData] = useState(null)
+  const [coverUrl, setCoverUrl] = useState(null)
+  const [galleryUrls, setGalleryUrls] = useState([])
   const [loading, setLoading] = useState(true)
   const navigate = useNavigate()
 
@@ -21,33 +34,53 @@ export default function BusinessWebAdmin() {
         // 1. Obtener usuario actual
         const {
           data: { user },
-          error: userError,
         } = await supabase.auth.getUser()
 
-        if (userError) {
-          console.error('Error obteniendo el usuario actual:', userError)
-          return
-        }
+        if (!user) return
 
-        if (!user) {
-          console.warn('No hay usuario autenticado para cargar el negocio.')
-          return
-        }
-
-        // 2. Buscar SU negocio de forma segura
-        const { data, error } = await supabase
+        // 2. Buscar SU negocio de forma ultra-segura (evita error de múltiples filas)
+        const { data: bizArray, error: bizError } = await supabase
           .from('businesses')
           .select('*')
           .eq('owner_id', user.id)
-          .maybeSingle()
+          .limit(1)
 
-        if (error) throw error
+        if (bizError) throw bizError
 
-        // 3. Guardar en el estado
-        setBusinessData(data)
+        // 3. Extraer el primer elemento si existe
+        const bizData = bizArray && bizArray.length > 0 ? bizArray[0] : null
+
+        // 4. Si hay negocio, lo guardamos en el estado INMEDIATAMENTE
+        if (bizData) {
+          setBusinessData(bizData)
+
+          // 4. Buscar TODOS los archivos multimedia del negocio
+          try {
+            const { data: mediaFiles, error: mediaErr } = await supabase
+              .from('business_media')
+              .select('*')
+              .eq('business_id', bizData.id)
+              .order('sort_order', { ascending: true })
+
+            if (mediaErr) throw mediaErr
+
+            if (mediaFiles && mediaFiles.length > 0) {
+              // Identificamos la portada por su caption
+              const portada = mediaFiles.find((m) => m.caption === 'Foto de portada') || mediaFiles[0]
+              setCoverUrl(portada.url)
+
+              // Las demás imágenes van derechito al estado de la galería
+              const fotosGaleria = mediaFiles.filter((m) => m.id !== portada.id)
+              setGalleryUrls(fotosGaleria.map((m) => m.url))
+            }
+          } catch (mediaErr) {
+            console.warn('Error cargando la galería, pero el perfil está a salvo:', mediaErr)
+          }
+        } else {
+          setBusinessData(null)
+        }
       } catch (error) {
-        console.error('Error cargando el negocio:', error)
-        setBusinessData(null)
+        console.error('Error crítico cargando el dashboard:', error)
       } finally {
         setLoading(false)
       }
@@ -104,8 +137,8 @@ export default function BusinessWebAdmin() {
     )
   }
 
-  const coverImageUrl = 'https://images.unsplash.com/photo-1504674900247-0877df9cc836?w=1200&q=80'
-  const categoryLabel = businessData.category || 'Restaurante'
+  const coverImageUrl = coverUrl || '/placeholder-image.jpg'
+  const categoryLabel = CATEGORY_MAP[businessData.category] || businessData.category || 'Restaurante'
   const websiteText = businessData.website || 'No disponible'
   const phoneText = businessData.phone || 'No disponible'
 
@@ -124,7 +157,6 @@ export default function BusinessWebAdmin() {
           <div className="max-w-2xl">
             <p className="text-sm uppercase tracking-[0.28em] text-orange-500">{categoryLabel}</p>
             <h1 className="mt-2 text-3xl font-bold text-white sm:text-4xl">{businessData.name}</h1>
-            <p className="mt-3 text-slate-400">{businessData.food_type || 'Negocio local'}</p>
           </div>
 
           <div className="mt-6 rounded-3xl bg-slate-900/90 p-6 shadow-2xl shadow-black/30">
@@ -170,6 +202,38 @@ export default function BusinessWebAdmin() {
               </div>
             </div>
           </div>
+
+          {/* Sección de Descripción */}
+          {businessData.description && (
+            <div className="mt-6 px-4">
+              <h3 className="text-lg font-bold text-white mb-2">Acerca del negocio</h3>
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <p className="text-slate-300 text-sm whitespace-pre-wrap leading-relaxed">
+                  {businessData.description}
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="mt-6 px-4">
+            <h3 className="text-xl font-bold text-white mb-3">Galería del negocio</h3>
+            {galleryUrls.length === 0 ? (
+              <p className="text-slate-400 text-sm italic">Aún no has agregado fotos secundarias.</p>
+            ) : (
+              <PhotoProvider speed={() => 300} maskOpacity={0.95} className="dark-theme-lightbox">
+                <div className="grid grid-cols-2 gap-2">
+                  {galleryUrls.map((url, index) => (
+                    <PhotoView key={index} src={url}>
+                      <div
+                        className="h-32 bg-cover bg-center rounded-xl border border-slate-800 cursor-pointer active:scale-95 transition-transform"
+                        style={{ backgroundImage: `url(${url})` }}
+                      />
+                    </PhotoView>
+                  ))}
+                </div>
+              </PhotoProvider>
+            )}
+          </div>
         </div>
       </section>
 
@@ -180,6 +244,8 @@ export default function BusinessWebAdmin() {
       >
         ✏️ Editar mi información
       </button>
+
+      {/* Visor de Imágenes a Pantalla Completa */}
     </main>
   )
 }
